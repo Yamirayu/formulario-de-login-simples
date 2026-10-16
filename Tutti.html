@@ -89,13 +89,13 @@
 
         /* Estilos do Calendário e Rotinas */
         .card-rotina {
-            background: #fdfdfd; border: 1px solid #eee; padding: 15px; border-radius: 8px; margin-bottom: 15px; color: #333;
+            background: rgba(0,0,0,0.03); border: 1px solid rgba(0,0,0,0.1); padding: 15px; border-radius: 8px; margin-bottom: 15px;
         }
         .badge-escala {
             padding: 12px; border-radius: 6px; font-weight: bold; text-align: center; margin-top: 8px; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.5);
         }
         .progresso-bar {
-            background: #eee; border-radius: 10px; height: 12px; width: 100%; overflow: hidden; margin: 8px 0;
+            background: rgba(0,0,0,0.1); border-radius: 10px; height: 12px; width: 100%; overflow: hidden; margin: 8px 0;
         }
         .progresso-fill {
             background: #27ae60; height: 100%; width: 0%; transition: 0.3s;
@@ -132,7 +132,7 @@
                 <p>Meta Mensal: <b>R$ <span id="valMeta">0</span></b></p>
                 <input type="number" id="inGasto" placeholder="Valor do gasto (R$)">
                 <button class="btn-acao" onclick="addGasto()">Registrar Gasto</button>
-                <div style="margin-top: 20px; padding: 15px; background: #f0f0f0; border-radius: 8px;">
+                <div style="margin-top: 20px; padding: 15px; background: rgba(0,0,0,0.05); border-radius: 8px;">
                     <p style="margin: 5px 0;">Gasto Total: <span id="totalG">0</span></p>
                     <p style="margin: 5px 0;">Restante: <b id="restaG">0</b></p>
                 </div>
@@ -148,8 +148,8 @@
         <section id="vencimentos" class="container">
             <h2>Vencimentos da Casa</h2>
             
-            <div style="background: #fdfdfd; padding: 15px; border-radius: 8px; border: 1px solid #eee; margin-bottom: 20px;">
-                <small style="color: #666;"><b>Cadastrar Novo / Editar:</b></small>
+            <div style="background: rgba(0,0,0,0.03); padding: 15px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.08); margin-bottom: 20px;">
+                <small><b>Cadastrar Novo / Editar:</b></small>
                 <input type="text" id="vNome" placeholder="Nome do Produto">
                 <div style="display: flex; gap: 5px;">
                     <input type="number" id="vQtd" placeholder="Qtd">
@@ -161,7 +161,7 @@
 
             <hr style="opacity: 0.2; margin: 20px 0;">
             <input type="text" id="searchV" placeholder="🔍 Pesquisar na lista..." onkeyup="renderVenc()">
-            <div id="listaV" style="margin-top:15px; color: #333; text-align: left;"></div>
+            <div id="listaV" style="margin-top:15px; text-align: left;"></div>
         </section>
 
         <!-- SEÇÃO CALENDÁRIO & ROTINAS -->
@@ -177,7 +177,7 @@
             <!-- Rotina de Limpeza -->
             <div class="card-rotina">
                 <h3>🧹 Escala de Limpeza (A cada 15 dias)</h3>
-                <p style="margin: 5px 0; font-size: 0.85em; color: #666;">Meta total: <b>6 Prateleiras</b> e <b>2 Geladeiras</b>.</p>
+                <p style="margin: 5px 0; font-size: 0.85em; opacity: 0.8;">Meta total: <b>6 Prateleiras</b> e <b>2 Geladeiras</b>.</p>
                 
                 <div id="info-limpeza"></div>
                 
@@ -192,18 +192,12 @@
                 <button class="btn-acao" style="background:#8e44ad; margin-top:8px;" onclick="concluirLimpeza()">Concluir Ciclo de Limpeza</button>
             </div>
 
-            <!-- Rotina de Etiquetas (Prazo de 5 Dias) -->
+            <!-- Rotina de Etiquetas (5 Dias com Início e Fim Antecipado) -->
             <div class="card-rotina">
                 <h3>🏷️ Troca de Etiquetas (Prazo: 5 Dias)</h3>
                 <div id="info-etiquetas"></div>
                 
-                <div style="margin-top: 10px;">
-                    <label><b>📝 Observação Diária:</b></label>
-                    <textarea id="obsEtiquetaDiaria" rows="2" placeholder="Escreva a observação de hoje..."></textarea>
-                    <button class="btn-acao" style="background:#2980b9; margin-top:5px;" onclick="salvarObsDiariaEtiqueta()">Salvar Obs de Hoje</button>
-                    
-                    <button class="btn-acao" style="background:#27ae60; margin-top:10px;" onclick="finalizarEtiquetasAntesDoPrazo()">✅ Finalizar com Sucesso</button>
-                </div>
+                <div id="controle-etiqueta-ativo" style="margin-top: 10px;"></div>
             </div>
         </section>
 
@@ -245,11 +239,11 @@
         },
         vencimentos: [],
         limpeza: { prateleiras: 0, geladeiras: 0, ultimaData: new Date().toISOString() },
-        etiquetas: { ultimaData: new Date().toISOString(), historicoObs: [] }
+        etiquetas: { emAndamento: false, dataInicio: null, historicoObs: [] }
     };
 
     if (!db.limpeza) db.limpeza = { prateleiras: 0, geladeiras: 0, ultimaData: new Date().toISOString() };
-    if (!db.etiquetas) db.etiquetas = { ultimaData: new Date().toISOString(), historicoObs: [] };
+    if (!db.etiquetas) db.etiquetas = { emAndamento: false, dataInicio: null, historicoObs: [] };
 
     function renderPerfis() {
         const container = document.getElementById('lista-avatars');
@@ -412,28 +406,75 @@
         document.getElementById('info-limpeza').innerHTML = `
             <p style="margin:5px 0;">Prateleiras: <b>${db.limpeza.prateleiras}/6</b> | Geladeiras: <b>${db.limpeza.geladeiras}/2</b></p>`;
 
-        // Etiquetas (Prazo de 5 Dias)
-        const uEti = new Date(db.etiquetas.ultimaData);
-        const diffDiasEti = Math.floor((hoje - uEti) / (1000 * 60 * 60 * 24));
-        const diasRestantes = 5 - diffDiasEti;
-
+        // Etiquetas (5 Dias)
         const infoEti = document.getElementById('info-etiquetas');
-        if (diasRestantes <= 0) {
-            infoEti.innerHTML = `<p style="color:#c0392b; font-weight:bold; margin:5px 0;">⚠️ Prazo de etiquetas em andamento/vencido!</p>`;
-        } else {
-            infoEti.innerHTML = `<p style="margin:5px 0;">Tempo restante no prazo: <b>${diasRestantes} dia(s)</b>.</p>`;
-        }
+        const boxCtrl = document.getElementById('controle-etiqueta-ativo');
 
-        let htmlObs = "<div style='margin-top:8px; font-size:0.85em; background:rgba(0,0,0,0.05); padding:8px; border-radius:4px;'><b>Histórico de Observações:</b>";
-        if (db.etiquetas.historicoObs && db.etiquetas.historicoObs.length > 0) {
-            db.etiquetas.historicoObs.slice(-3).forEach(o => {
-                htmlObs += `<br>• [${o.autor}]: ${o.texto} <small style="opacity:0.7;">(${o.data})</small>`;
-            });
+        if (!db.etiquetas.emAndamento) {
+            infoEti.innerHTML = `<p style="margin:5px 0;">Nenhum ciclo de etiquetas iniciado no momento.</p>`;
+            boxCtrl.innerHTML = `
+                <button class="btn-acao" style="background:#27ae60;" onclick="iniciarCicloEtiquetas()">▶️ Iniciar Contagem (5 Dias)</button>`;
         } else {
-            htmlObs += "<br>Nenhuma observação registrada ainda.";
+            const inicio = new Date(db.etiquetas.dataInicio);
+            const diasPassados = Math.floor((hoje - inicio) / (1000 * 60 * 60 * 24));
+            const diasRestantes = 5 - diasPassados;
+
+            if (diasRestantes <= 0) {
+                infoEti.innerHTML = `<p style="color:#c0392b; font-weight:bold; margin:5px 0;">⚠️ Prazo de 5 dias esgotado! Finalize logo.</p>`;
+            } else {
+                infoEti.innerHTML = `<p style="margin:5px 0;">Restam <b>${diasRestantes} dia(s)</b> para concluir o prazo de 5 dias.</p>`;
+            }
+
+            let htmlObs = "<div style='margin-top:8px; font-size:0.85em; background:rgba(0,0,0,0.05); padding:8px; border-radius:4px;'><b>Observações do Ciclo:</b>";
+            if (db.etiquetas.historicoObs && db.etiquetas.historicoObs.length > 0) {
+                db.etiquetas.historicoObs.forEach(o => {
+                    htmlObs += `<br>• [${o.autor}]: ${o.texto} <small style="opacity:0.7;">(${o.data})</small>`;
+                });
+            } else {
+                htmlObs += "<br>Nenhuma observação registrada ainda.";
+            }
+            htmlObs += "</div>";
+            infoEti.innerHTML += htmlObs;
+
+            boxCtrl.innerHTML = `
+                <label><b>📝 Observação (Opcional):</b></label>
+                <textarea id="obsEtiquetaDiaria" rows="2" placeholder="Ex: Terminei essa parte, falta outra..."></textarea>
+                <button class="btn-acao" style="background:#2980b9; margin-top:5px;" onclick="salvarObsDiariaEtiqueta()">Salvar Observação</button>
+                <button class="btn-acao" style="background:#27ae60; margin-top:10px;" onclick="finalizarCicloEtiquetas()">✅ Finalizar e Limpar Ciclo</button>`;
         }
-        htmlObs += "</div>";
-        infoEti.innerHTML += htmlObs;
+    }
+
+    function iniciarCicloEtiquetas() {
+        db.etiquetas.emAndamento = true;
+        db.etiquetas.dataInicio = new Date().toISOString();
+        db.etiquetas.historicoObs = [];
+        salvar();
+        renderCalendario();
+        alert("Ciclo de 5 dias de etiquetas iniciado!");
+    }
+
+    function salvarObsDiariaEtiqueta() {
+        const txt = document.getElementById('obsEtiquetaDiaria').value.trim();
+        if (!txt) return alert("Escreva uma observação válida!");
+
+        if (!db.etiquetas.historicoObs) db.etiquetas.historicoObs = [];
+        db.etiquetas.historicoObs.push({ autor: logado, texto: txt, data: new Date().toLocaleDateString('pt-BR') });
+
+        document.getElementById('obsEtiquetaDiaria').value = "";
+        salvar();
+        renderCalendario();
+        alert("Observação salva com sucesso!");
+    }
+
+    function finalizarCicloEtiquetas() {
+        if (confirm("Deseja finalizar o ciclo de etiquetas e limpar as observações para o próximo?")) {
+            db.etiquetas.emAndamento = false;
+            db.etiquetas.dataInicio = null;
+            db.etiquetas.historicoObs = [];
+            salvar();
+            renderCalendario();
+            alert("Ciclo de etiquetas finalizado e limpo com sucesso!");
+        }
     }
 
     function registrarLimpeza(tipo) {
@@ -449,28 +490,6 @@
             salvar();
             renderCalendario();
             alert("Ciclo de limpeza renovado!");
-        }
-    }
-
-    function salvarObsDiariaEtiqueta() {
-        const txt = document.getElementById('obsEtiquetaDiaria').value.trim();
-        if (!txt) return alert("Escreva uma observação válida!");
-
-        if (!db.etiquetas.historicoObs) db.etiquetas.historicoObs = [];
-        db.etiquetas.historicoObs.push({ autor: logado, texto: txt, data: new Date().toLocaleDateString('pt-BR') });
-
-        document.getElementById('obsEtiquetaDiaria').value = "";
-        salvar();
-        renderCalendario();
-        alert("Observação diária salva com sucesso!");
-    }
-
-    function finalizarEtiquetasAntesDoPrazo() {
-        if (confirm("Marcar a troca de etiquetas como totalmente finalizada?")) {
-            db.etiquetas.ultimaData = new Date().toISOString();
-            salvar();
-            renderCalendario();
-            alert("Etiquetas finalizadas com sucesso! Novo ciclo iniciado.");
         }
     }
 
@@ -509,19 +528,18 @@
     }
 
     function salvarCores() {
-        db.perfis[logado].cores.bg = document.getElementById('cfgBg'].value;
+        db.perfis[logado].cores.bg = document.getElementById('cfgBg').value;
         db.perfis[logado].cores.card = document.getElementById('cfgCard').value;
         salvar(); 
         aplicarCores();
     }
 
-    // Função auxiliar para calcular se a cor é clara ou escura e ajustar o texto automaticamente
+    // Função que calcula se o card é escuro para mudar o texto para branco automaticamente
     function calcularContrasteTexto(hexColor) {
         const hex = hexColor.replace('#', '');
         const r = parseInt(hex.substr(0, 2), 16);
         const g = parseInt(hex.substr(2, 2), 16);
         const b = parseInt(hex.substr(4, 2), 16);
-        // Fórmula de luminância padrão
         const luminancia = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
         return luminancia > 0.5 ? '#333333' : '#ffffff';
     }
@@ -530,13 +548,11 @@
         const c = db.perfis[logado].cores;
         document.body.style.backgroundColor = c.bg;
         
-        const containerEl = document.getElementById('ajustes').parentElement; // interface-principal / container
-        // Aplica a cor do card e calcula se a fonte deve ser branca ou escura automaticamente
         const corTextoCalculada = calcularContrasteTexto(c.card);
         
         document.querySelectorAll('.container').forEach(cont => {
             cont.style.backgroundColor = c.card;
-            cont.style.color = corTextCalculada;
+            cont.style.color = corTextoCalculada;
         });
     }
 
