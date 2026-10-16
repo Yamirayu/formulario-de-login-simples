@@ -100,6 +100,13 @@
         .progresso-fill {
             background: #27ae60; height: 100%; width: 0%; transition: 0.3s;
         }
+
+        /* BANCO DE FOLGAS */
+        .placar-creditos {
+            display: flex; gap: 10px; justify-content: space-around; background: #2c3e50; color: white;
+            padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 0.9em; text-align: center;
+        }
+        .placar-item { background: rgba(255,255,255,0.1); padding: 6px 12px; border-radius: 6px; }
     </style>
 </head>
 <body>
@@ -168,9 +175,33 @@
         <section id="calendario" class="container">
             <h2>Calendário & Escala</h2>
             
-            <!-- Escala de Sábado -->
+            <!-- BANCO DE FOLGAS E TROCA DE SÁBADO -->
             <div class="card-rotina">
-                <h3>📅 Escala de Trabalho (Sábados)</h3>
+                <h3>🎮 Banco de Créditos de Folga</h3>
+                <p style="font-size: 0.85em; opacity: 0.8; margin: 0 0 8px 0;">Trabalhar no sábado de outra pessoa gera <b>+1 crédito de folga</b> para resgatar depois.</p>
+                
+                <div class="placar-creditos" id="placar-folgas"></div>
+
+                <div style="background: rgba(39, 174, 96, 0.15); border: 1px solid #27ae60; padding: 12px; border-radius: 6px; margin-top: 10px;">
+                    <label><b>➕ Registrar Dobradinha (Trabalhou extra pelo colega):</b></label>
+                    <select id="selectQuemTrabalhou">
+                        <option value="">Quem trabalhou extra...</option>
+                    </select>
+                    <button class="btn-acao" style="background: #27ae60; margin-top: 5px;" onclick="ganharCredito()">Ganhar +1 Crédito de Folga</button>
+                </div>
+
+                <div style="background: rgba(230, 126, 34, 0.15); border: 1px solid #e67e22; padding: 12px; border-radius: 6px; margin-top: 10px;">
+                    <label><b>🎁 Resgatar Folga (Usar Crédito):</b></label>
+                    <select id="selectResgatarData">
+                        <option value="">Selecione o sábado para folgar...</option>
+                    </select>
+                    <button class="btn-acao" style="background: #e67e22; margin-top: 5px;" onclick="resgatarCredito()">Usar 1 Crédito e Folgar</button>
+                </div>
+            </div>
+
+            <!-- Escala de Sábado Atual -->
+            <div class="card-rotina">
+                <h3>📅 Próximo Sábado de Trabalho</h3>
                 <div id="status-sabado"></div>
             </div>
 
@@ -233,17 +264,19 @@
 
     let db = JSON.parse(localStorage.getItem('casaDB_vFinal')) || {
         perfis: {
-            "Erick": { meta: 0, gastos: 0, foto: "", cores: { bg: "#141414", card: "#2980b9" } },
-            "Yara": { meta: 0, gastos: 0, foto: "", cores: { bg: "#141414", card: "#e67e22" } },
-            "Micaely": { meta: 0, gastos: 0, foto: "", cores: { bg: "#141414", card: "#9b59b6" } }
+            "Erick": { meta: 0, gastos: 0, foto: "", creditosFolga: 0, cores: { bg: "#141414", card: "#2980b9" } },
+            "Yara": { meta: 0, gastos: 0, foto: "", creditosFolga: 0, cores: { bg: "#141414", card: "#e67e22" } },
+            "Micaely": { meta: 0, gastos: 0, foto: "", creditosFolga: 0, cores: { bg: "#141414", card: "#9b59b6" } }
         },
         vencimentos: [],
         limpeza: { prateleiras: 0, geladeiras: 0, ultimaData: new Date().toISOString() },
-        etiquetas: { emAndamento: false, dataInicio: null, historicoObs: [] }
+        etiquetas: { emAndamento: false, dataInicio: null, historicoObs: [] },
+        folgasResgatadas: {}
     };
 
     if (!db.limpeza) db.limpeza = { prateleiras: 0, geladeiras: 0, ultimaData: new Date().toISOString() };
     if (!db.etiquetas) db.etiquetas = { emAndamento: false, dataInicio: null, historicoObs: [] };
+    if (!db.folgasResgatadas) db.folgasResgatadas = {};
 
     function renderPerfis() {
         const container = document.getElementById('lista-avatars');
@@ -380,22 +413,63 @@
 
     function delV(i) { if(confirm("Excluir este item?")) { db.vencimentos.splice(i,1); salvar(); renderVenc(); } }
 
-    // --- CALENDÁRIO & ROTINAS ---
+    // --- CALENDÁRIO & ESCALAS SÁBADO ---
+    function getSemanaKey(offset = 0) {
+        const hoje = new Date();
+        hoje.setDate(hoje.getDate() + (offset * 7));
+        const dataBase = new Date(2026, 0, 3);
+        return Math.floor((hoje - dataBase) / (1000 * 60 * 60 * 24 * 7));
+    }
+
     function renderCalendario() {
         const hoje = new Date();
-        const dataBase = new Date(2026, 0, 3);
-        const diffSemanas = Math.floor((hoje - dataBase) / (1000 * 60 * 60 * 24 * 7));
-        
+        const semanaKey = getSemanaKey(0);
         const perfisAtuais = Object.keys(db.perfis);
+        
+        // 1. Renderiza o Placar de Créditos
+        const placar = document.getElementById('placar-folgas');
+        placar.innerHTML = "";
+        perfisAtuais.forEach(p => {
+            const creds = db.perfis[p].creditosFolga || 0;
+            placar.innerHTML += `<div class="placar-item"><b>${p}</b><br>🎫 ${creds} Crédito(s)</div>`;
+        });
+
+        // 2. Preenche o select de quem trabalhou extra
+        const selTrabalhou = document.getElementById('selectQuemTrabalhou');
+        selTrabalhou.innerHTML = '<option value="">Quem trabalhou extra...</option>';
+        perfisAtuais.forEach(p => {
+            selTrabalhou.innerHTML += `<option value="${p}">${p}</option>`;
+        });
+
+        // 3. Preenche os próximos 4 sábados no select de resgate
+        const selResgate = document.getElementById('selectResgatarData');
+        selResgate.innerHTML = '<option value="">Selecione o sábado para folgar...</option>';
+        for (let i = 0; i < 4; i++) {
+            const key = getSemanaKey(i);
+            const proxSab = new Date();
+            proxSab.setDate(hoje.getDate() + ((6 - hoje.getDay() + 7) % 7) + (i * 7));
+            const dataStr = proxSab.toLocaleDateString('pt-BR');
+            selResgate.innerHTML += `<option value="${key}">${dataStr} (${i === 0 ? 'Este sábado' : 'Próximo'})</option>`;
+        }
+
+        // 4. Calcula quem trabalha este sábado
         const divSabado = document.getElementById('status-sabado');
+        let pessoaTrabalha = "";
+        let observacaoResgate = "";
 
-        if (perfisAtuais.length > 0) {
-            const pessoaVez = perfisAtuais[Math.abs(diffSemanas) % perfisAtuais.length];
-            const corPessoa = db.perfis[pessoaVez] ? db.perfis[pessoaVez].cores.card : "#e50914";
+        if (db.folgasResgatadas[semanaKey]) {
+            const quemFolga = db.folgasResgatadas[semanaKey];
+            pessoaTrabalha = perfisAtuais.find(p => p !== quemFolga) || "Substituto";
+            observacaoResgate = `<br><small style="color:#f39c12;">(Folga resgatada por <b>${quemFolga}</b> via Banco de Folgas)</small>`;
+        } else if (perfisAtuais.length > 0) {
+            pessoaTrabalha = perfisAtuais[Math.abs(semanaKey) % perfisAtuais.length];
+        }
 
+        if (pessoaTrabalha) {
+            const corPessoa = db.perfis[pessoaTrabalha] ? db.perfis[pessoaTrabalha].cores.card : "#e50914";
             divSabado.innerHTML = `
                 <div class="badge-escala" style="background-color: ${corPessoa};">
-                    Sábado de Trabalho: <b>${pessoaVez}</b>
+                    Sábado de Trabalho: <b>${pessoaTrabalha}</b>${observacaoResgate}
                 </div>`;
         }
 
@@ -441,6 +515,37 @@
                 <textarea id="obsEtiquetaDiaria" rows="2" placeholder="Ex: Terminei essa parte, falta outra..."></textarea>
                 <button class="btn-acao" style="background:#2980b9; margin-top:5px;" onclick="salvarObsDiariaEtiqueta()">Salvar Observação</button>
                 <button class="btn-acao" style="background:#27ae60; margin-top:10px;" onclick="finalizarCicloEtiquetas()">✅ Finalizar e Limpar Ciclo</button>`;
+        }
+    }
+
+    function ganharCredito() {
+        const pessoa = document.getElementById('selectQuemTrabalhou').value;
+        if (!pessoa) return alert("Selecione quem trabalhou!");
+
+        if (!db.perfis[pessoa].creditosFolga) db.perfis[pessoa].creditosFolga = 0;
+        db.perfis[pessoa].creditosFolga += 1;
+
+        salvar();
+        renderCalendario();
+        alert(`Parabéns! ${pessoa} ganhou +1 Crédito de Folga!`);
+    }
+
+    function resgatarCredito() {
+        const semanaKey = document.getElementById('selectResgatarData').value;
+        if (!semanaKey) return alert("Selecione o sábado!");
+
+        const saldoAtual = db.perfis[logado].creditosFolga || 0;
+
+        if (saldoAtual <= 0) {
+            return alert("Você não possui Créditos de Folga no momento. Trabalhe um sábado extra para ganhar!");
+        }
+
+        if (confirm(`Confirmar o resgate de 1 crédito para folgar no sábado selecionado?`)) {
+            db.perfis[logado].creditosFolga -= 1;
+            db.folgasResgatadas[semanaKey] = logado;
+            salvar();
+            renderCalendario();
+            alert("Folga resgatada com sucesso! A escala do sábado foi atualizada.");
         }
     }
 
@@ -534,7 +639,7 @@
         aplicarCores();
     }
 
-    // Função que calcula se o card é escuro para mudar o texto para branco automaticamente
+    // Calcula se a cor do card é escura para deixar a fonte branca automaticamente
     function calcularContrasteTexto(hexColor) {
         const hex = hexColor.replace('#', '');
         const r = parseInt(hex.substr(0, 2), 16);
